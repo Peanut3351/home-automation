@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import RPI.GPIO as GPIO
 import socket
+import sched
+import time
 
 lr_temp = 'raspberrypi'  #livingroom temp sensor hostname/IP
 br_temp = ''  #bedroom temp sensor hostname/IP
@@ -12,6 +14,7 @@ W2 = null  #heat 2nd stage
 Y1 = 27  #compressor 1st stage
 Y2 = null  #compressor 2nd stage
 G = 17  #fan
+config = open("config.txt", "rw")
 
 def get_ip():  #gets the IP of the current device
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -52,13 +55,21 @@ def inttobytes(x):
     return x.to_bytes((x.bit_length() + 7) // 8, 'big')
 
 def commands(x):
+    deviceID = x[2:-4]
+    cmdType = x[4:-2]
+    cmdValue = x[6:]
     return
 
 def sensors(x):
-    sensorID = int(x[2:-4])
-    dataType = int(x[4:-2])
-    dataValue = int(x[6:])
-    
+    global temp0
+    global temp1
+    sensorID = x[2:-4]
+    dataType = x[4:-2]
+    dataValue = x[6:]
+    if sensorID == '02':
+        temp0 = dataValue
+    if sensorID == '03':
+        temp1 = dataValue
     return
 
 def allOff():  #open all relays
@@ -78,12 +89,43 @@ def acOn():  #turn on compressor and fan
     return
 
 def identify(x):
-    global temp
     typeID = x[:2]
     if typeID == '99':  #sending device is temp sensor
         sensors(x)
     if typeID == '00' or '01':  #sending device is desktop/laptop/mobile
         commands(x)
+    return
+
+def process(conn):
+    global buffer_size
+    data = conn.recv(buffer_size)
+    decoded = str(intfrombytes(data))  #convert from bytes to numbers to string
+    return decoded
+
+def preferredSens():
+    global config
+    global temp0
+    global temp1
+    preferred = config.readline(1)
+    if preferred == '0':
+        return temp0
+    if preferred == '1':
+        return temp1
+    return
+
+def systemRun():
+    global target_temp
+    if preferredSens() > target_temp and mode() == 'aircon':
+        acOn()
+    if preferredSens() <= target_temp and mode() == 'aircon':
+        allOff()
+    if preferredSens() < target_temp and mode() == 'heat':
+        heatOn()
+    if preferredSens() >= target_temp and mode() == 'heat':
+        allOff()
+    return
+
+
 
 GPIO.setmode(GPIO.BCM)
 outputs = [22,27,17]
@@ -98,8 +140,17 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((tcp_ip, tcp_port))
 s.listen(1)  #open for tcp packet listening
 
+conn = null
+addr = null
+starttime = time.time()
 while 1:
+    requestTemp0()
     conn, addr = s.accept()
-    data = conn.recv(buffer_size)
-    decoded = str(intfrombytes(data))  #convert from bytes to numbers to string
-    identify(decoded)  #break down the packet and conduct pertinent functions
+    identify(process(conn))
+    s.close()
+#    requestTemp1()
+#    conn, addr = s.accept()
+#    identify(process(conn))
+#    s.close()
+    systemRun()
+    time.sleep(60 - ((time.time() - starttime) % 60.0))
