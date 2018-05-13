@@ -25,7 +25,7 @@ def get_ip():  #gets the IP of the current device
         s.close()
     return IP
 
-def gettemp0():
+def requestTemp0():
     global i
     global tcp_port
     global lr_temp
@@ -35,7 +35,7 @@ def gettemp0():
     i.close()
     return
 
-def gettemp1():
+def requestTemp1():
     global i
     global tcp_port
     global br_temp
@@ -56,8 +56,8 @@ def commands(x):
 
 def sensors(x):
     sensorID = int(x[2:-4])
-    cmdID = int(x[4:-2])
-    cmdNo = int(x[6:])
+    dataType = int(x[4:-2])
+    dataValue = int(x[6:])
     
     return
 
@@ -97,8 +97,6 @@ i = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((tcp_ip, tcp_port))
 s.listen(1)  #open for tcp packet listening
-gettemp0()
-gettemp1()
 
 while 1:
     conn, addr = s.accept()
